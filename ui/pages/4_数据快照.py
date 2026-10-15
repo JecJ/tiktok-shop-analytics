@@ -32,11 +32,11 @@ try:
     local_config = json.loads(config_path.read_text(encoding="utf-8")) if config_path.exists() else {}
 except (OSError, ValueError):
     local_config = {}
-default_keywords = local_config.get("keywords", "yoga mat, massage gun, air fryer")
+default_keywords = local_config.get("keywords", "")
 keywords = st.text_input("每日采集关键词（英文逗号分隔）", value=default_keywords,
                          help="关键词会用于当前所选市场；例如 bra, sports bra, lingerie。")
 token = st.text_input("GitHub Fine-grained Token（仅本次会话使用）", type="password",
-                      help="需要此仓库 Actions: write 权限。不会写入本地文件。")
+                      help="使用你自己的 JecJ GitHub 账户创建，仅授权 tiktok-shop-analytics 仓库，并授予 Actions: write。Token 只在当前会话中用于更新仓库变量，不会保存到文件。")
 if st.button("同步当前市场和关键词到 GitHub Actions"):
     try:
         sync_daily_settings(token, settings.region, keywords)
