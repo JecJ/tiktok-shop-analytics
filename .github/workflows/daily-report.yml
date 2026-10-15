@@ -12,8 +12,8 @@ on:
         options: [US, TH, MX, BR, VN, PH, MY, ID, SG, JP, GB, ES, DE, IT, FR]
         default: US
       keywords:
-        description: 英文关键词，逗号分隔
-        required: true
+        description: 英文关键词，留空时使用仓库变量 DAILY_KEYWORDS
+        required: false
         type: string
         default: ""
 
