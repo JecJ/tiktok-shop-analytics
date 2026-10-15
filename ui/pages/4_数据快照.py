@@ -68,7 +68,14 @@ if st.button("一键加载最新每日采集数据"):
             reset_db_cache()
             st.success(f"已加载 {len(data)/1024:.0f} KB 数据，可到总览页查看，或点上方「重新生成分析报告」。")
     except Exception as exc:
-        st.error(f"加载 {settings.region} 市场快照失败：{exc}。该市场可能尚未成功运行每日 Actions。")
+        if getattr(exc, "code", None) == 404:
+            st.error(
+                f"尚未找到 {settings.region} 市场的已发布快照。请确认 GitHub Actions 已启用，"
+                "仓库 Secret 已配置 TTSHOP_API_KEY，并且 daily-report 最近一次运行成功；"
+                "成功发布后再回到这里加载。"
+            )
+        else:
+            st.error(f"加载 {settings.region} 市场快照失败：{exc}")
 
 st.subheader("③ 导出数据快照")
 if st.button("打包当前数据库"):
