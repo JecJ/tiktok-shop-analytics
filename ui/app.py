@@ -9,14 +9,16 @@ if str(ROOT) not in sys.path:
 import pandas as pd
 import streamlit as st
 
-from ui.common import get_db, require_password, setup_env
+from ui.common import MARKET_LABELS, get_db, get_settings, require_password, setup_env
 
-st.set_page_config(page_title="TikTok Shop 数据分析", page_icon="📊", layout="wide")
+st.set_page_config(page_title="TikTok Shop 市场分析", page_icon="📊", layout="wide")
 setup_env()
 require_password()
 
-st.title("📊 TikTok Shop 东南亚数据分析")
-st.caption("类目选品 / 商品追踪 / 店铺监控 · 数据来自 EchoTik OpenAPI")
+market = get_settings().region
+market_label = MARKET_LABELS.get(market, market)
+st.title(f"📊 TikTok Shop {market_label}市场分析")
+st.caption(f"{market_label}站 · 文胸类目选品 / 商品追踪 / 店铺监控 · 数据来自 EchoTik OpenAPI")
 
 db = get_db()
 stats = db.stats()

@@ -14,3 +14,6 @@ data/socialcrawl_key.txt
 
 data/*.db.bak
 data/streamlit_secrets.txt
+data/daily_collection.json
+
+logs/*.pid

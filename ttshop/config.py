@@ -12,7 +12,7 @@ class Settings:
     report_dir: str = "reports"
 
     # 目标市场（TikTok Shop 数据按区域隔离）
-    region: str = "TH"  # 默认市场：泰国（东南亚），可用 TTSHOP_REGION 覆盖
+    region: str = "US"  # 默认市场：美国，可用 TTSHOP_REGION 覆盖
     currency: str = "USD"  # EchoTik 接口统一返回美元价
 
     # 真实采集（scraper 数据源）
@@ -31,7 +31,7 @@ class Settings:
 
     # 毛利测算参数（跨境小包直发模型，可按品类调整）
     purchase_cost_ratio: float = 0.25   # 采购成本 / 售价（1688 拿货估算）
-    platform_commission: float = 0.05   # TikTok Shop 平台佣金比例
+    platform_commission: float = 0.08   # 暂定平台及支付费估值，可按实际账号费率调整
     shipping_cost: float = 4.0          # 头程 + 尾程物流，美元/单
     ad_spend_ratio: float = 0.15        # 广告投放 / 售价
     other_cost: float = 1.0             # 包装、汇损等固定成本，美元/单

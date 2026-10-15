@@ -218,7 +218,8 @@ class ApiSource(DataSource):
         self.enrich = bool(enrich)
         self.language = language
         self._tree: dict | None = None
-        self.categories_cache = Path(settings.db_path).parent / "categories.json"
+        cache_name = "categories.json" if language == "en-US" else f"categories_{language}.json"
+        self.categories_cache = Path(settings.db_path).parent / cache_name
 
     # ------------------------------------------------------------------ fetch
     def fetch(self, keyword: str | None = None, limit: int | None = None,
@@ -477,6 +478,10 @@ class ApiSource(DataSource):
         if self._tree is None:
             self._tree = self.fetch_categories()
         return self._tree
+
+    def category_path(self, category_id: str) -> str:
+        """Return localized full path for a category ID using this source's language."""
+        return self._category_path(self._ensure_categories(), str(category_id))
 
     def search_categories(self, term: str, limit: int = 50) -> list[dict]:
         """Search the category tree by name; returns full-path matches."""
@@ -866,6 +871,12 @@ class ApiSource(DataSource):
                 raise RuntimeError(f"API request failed HTTP {exc.code}: {exc.reason}") from exc
             except URLError as exc:
                 last_error = exc
+                reason = exc.reason
+                if getattr(reason, "winerror", None) == 10061 or "10061" in str(reason):
+                    raise RuntimeError(
+                        "无法连接 EchoTik API（目标计算机拒绝连接，尚未进入凭证校验）。"
+                        "请检查当前网络/代理/防火墙能否访问 https://open.echotik.live:443。"
+                    ) from exc
                 if attempt < retries:
                     wait = 2 ** attempt
                     logger.warning("API 网络错误（第 %d 次），%ds 后重试: %s",

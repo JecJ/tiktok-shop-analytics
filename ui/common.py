@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
+import base64
 from datetime import datetime
 from pathlib import Path
 
@@ -19,6 +21,29 @@ import streamlit as st
 
 from ttshop.config import Settings
 from ttshop.db import Database
+
+MARKETS = [
+    ("美洲", "US", "🇺🇸 美国"), ("美洲", "MX", "🇲🇽 墨西哥"), ("美洲", "BR", "🇧🇷 巴西"),
+    ("亚洲", "VN", "🇻🇳 越南"), ("亚洲", "TH", "🇹🇭 泰国"), ("亚洲", "PH", "🇵🇭 菲律宾"),
+    ("亚洲", "MY", "🇲🇾 马来西亚"), ("亚洲", "ID", "🇮🇩 印度尼西亚"), ("亚洲", "SG", "🇸🇬 新加坡"), ("亚洲", "JP", "🇯🇵 日本"),
+    ("欧洲", "GB", "🇬🇧 英国"), ("欧洲", "ES", "🇪🇸 西班牙"), ("欧洲", "DE", "🇩🇪 德国"),
+    ("欧洲", "IT", "🇮🇹 意大利"), ("欧洲", "FR", "🇫🇷 法国"),
+]
+MARKET_LABELS = {code: label for _, code, label in MARKETS}
+
+
+def normalize_echotik_credential(value: str) -> str:
+    """Accept a raw Basic token, a Basic header, or copied username:password."""
+    value = (value or "").strip()
+    value = re.sub(r"^authorization\s*:\s*", "", value, flags=re.IGNORECASE)
+    if value.lower().startswith("basic "):
+        value = value[6:].strip()
+    wrapped = re.fullmatch(r"base64\((.*)\)", value, flags=re.IGNORECASE | re.DOTALL)
+    if wrapped:
+        value = wrapped.group(1).strip()
+    if ":" in value:
+        return base64.b64encode(value.encode("utf-8")).decode("ascii")
+    return value
 
 
 def setup_env() -> None:
@@ -41,6 +66,40 @@ def setup_env() -> None:
         if val:
             os.environ[env_key] = str(val)
 
+    env_region = os.environ.get("TTSHOP_REGION", "US").upper()
+    if "market_region" not in st.session_state:
+        st.session_state.market_region = env_region if env_region in MARKET_LABELS else "US"
+    prior_region = st.session_state.get("_last_market_region", st.session_state.market_region)
+    st.sidebar.selectbox(
+        "选择市场", [code for _, code, _ in MARKETS],
+        format_func=lambda code: f"{MARKET_LABELS[code]} · {code}", key="market_region",
+        help="每个市场使用独立数据库；切换后该市场的数据会单独显示。",
+    )
+    if prior_region != st.session_state.market_region:
+        st.session_state.pop("cat_matches", None)
+        st.session_state.pop("last_products", None)
+    st.session_state._last_market_region = st.session_state.market_region
+
+    # 本地侧栏输入优先保存在 Streamlit 会话；选择保存时仅写入 git 忽略的本地密钥文件。
+    key_path = ROOT / "data" / "api_key.txt"
+    saved_key = key_path.read_text(encoding="utf-8").strip() if key_path.exists() else ""
+    if "echotik_api_key" not in st.session_state:
+        st.session_state["echotik_api_key"] = saved_key or os.environ.get("TTSHOP_API_KEY", "")
+    with st.sidebar.expander("数据源设置 · EchoTik", expanded=not bool(st.session_state["echotik_api_key"])):
+        st.caption("从 EchoTik API Docs / API Keys 复制凭证；可粘贴完整 Authorization: Basic … 行、Basic …，或 Base64(username:password)。")
+        st.link_button("打开 EchoTik API Keys", "https://echotik.live/platform/api-keys")
+        st.text_input("EchoTik API 凭证", type="password", key="echotik_api_key",
+                      placeholder="Authorization: Basic … 或 Base64(username:password)",
+                      help="支持粘贴后台的完整 Basic Authorization 行，保存时会自动整理格式。凭证保存在本机 data/api_key.txt（已加入 Git 忽略）。")
+        if st.button("保存到本机", key="save_echotik_key"):
+            value = normalize_echotik_credential(st.session_state.get("echotik_api_key", ""))
+            if not value:
+                st.warning("请先输入 EchoTik API Key")
+            else:
+                key_path.parent.mkdir(parents=True, exist_ok=True)
+                key_path.write_text(value + "\n", encoding="utf-8")
+                st.success("凭证已整理为 EchoTik Basic 格式并保存在本机。")
+
 
 def require_password() -> None:
     """访问密码门：只有云端配置了 APP_PASSWORD 才启用，本地预览不受影响。"""
@@ -62,13 +121,12 @@ def require_password() -> None:
         st.stop()
 
 
-@st.cache_resource(show_spinner=False)
 def get_settings() -> Settings:
     """Settings：数据库/报告路径固定指向仓库根目录，避免受启动目录影响。"""
     s = Settings()
-    _region = os.environ.get("TTSHOP_REGION")
-    if _region:
-        s.region = _region
+    s.region = st.session_state.get("market_region", os.environ.get("TTSHOP_REGION", "US")).upper()
+    if s.region != "US":
+        s.db_path = str(ROOT / "data" / f"tiktok_shop_{s.region}.db")
     _currency = os.environ.get("TTSHOP_CURRENCY")
     if _currency:
         s.currency = _currency
@@ -80,15 +138,19 @@ def get_settings() -> Settings:
 
 
 @st.cache_resource(show_spinner=False)
-def get_db() -> Database:
-    db = Database(get_settings().db_path)
+def _get_db(db_path: str) -> Database:
+    db = Database(db_path)
     db.init_schema()
     return db
 
 
+def get_db() -> Database:
+    return _get_db(get_settings().db_path)
+
+
 def reset_db_cache() -> None:
     """导入快照后清空数据库缓存，强制重新连接。"""
-    get_db.clear()
+    _get_db.clear()
 
 
 def get_api_source(**kwargs):
@@ -98,6 +160,9 @@ def get_api_source(**kwargs):
     provider = kwargs.pop("provider", None)
     if provider:
         kwargs["api_provider"] = provider
+    api_key = normalize_echotik_credential(st.session_state.get("echotik_api_key", ""))
+    if api_key:
+        kwargs["api_key"] = api_key
     return get_source("api", get_settings(), **kwargs)
 
 

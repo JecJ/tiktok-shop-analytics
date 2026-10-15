@@ -6,7 +6,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 import streamlit as st
 
-from ui.common import (collect_and_store, get_api_source, price_sold_chart,
+from ui.common import (MARKET_LABELS, collect_and_store, get_api_source, get_settings, price_sold_chart,
                        require_password, setup_env, show_products)
 
 st.set_page_config(page_title="类目采集", page_icon="🗂️", layout="wide")
@@ -14,7 +14,8 @@ setup_env()
 require_password()
 
 st.title("🗂️ 按类目采集")
-st.caption("先搜索类目关键词（如 yoga / fitness），在结果里选择类目，再点「开始采集」。")
+market = get_settings().region
+st.caption(f"{MARKET_LABELS.get(market, market)}文胸选品：搜索 bra / lingerie 等关键词，选择对应类目后开始采集。")
 
 SORT_LABELS = {
     "sales": "总销量降序", "sales7d": "近7天销量降序", "sales30d": "近30天销量降序",
@@ -23,7 +24,7 @@ SORT_LABELS = {
 }
 
 with st.form("category_form"):
-    term = st.text_input("搜索类目关键词", placeholder="例如 yoga / fitness / home")
+    term = st.text_input("搜索类目关键词", value="bra", placeholder="例如 bra / lingerie")
     sort_field = st.selectbox("排序方式", list(SORT_LABELS.keys()),
                               format_func=lambda v: SORT_LABELS[v])
     c1, c2, c3 = st.columns(3)
@@ -39,11 +40,24 @@ if submitted and term.strip():
     if not matches:
         st.warning(f"没有找到包含 {term.strip()!r} 的类目，换个英文关键词试试。")
         st.stop()
+    try:
+        localized = get_api_source(provider="echotik", language="zh-CN")
+        for match in matches:
+            match["path_zh"] = localized.category_path(match["category_id"])
+    except Exception as exc:
+        st.session_state["category_locale_error"] = str(exc)
+    else:
+        st.session_state.pop("category_locale_error", None)
     st.session_state["cat_matches"] = matches
 
 matches = st.session_state.get("cat_matches", [])
 if matches:
-    options = {f"[{m['level']}] {m['path']}  (ID: {m['category_id']})": m["category_id"] for m in matches}
+    if st.session_state.get("category_locale_error"):
+        st.info("接口暂未返回中文类目，本次显示英文原名。可继续按类目 ID 采集。")
+    options = {
+        f"[{m['level']}] {m.get('path_zh') or m['path']}　｜　{m['path']}　(ID: {m['category_id']})": m["category_id"]
+        for m in matches
+    }
     choice = st.selectbox(f"共 {len(matches)} 个匹配类目，选择要采集的类目：", list(options.keys()))
     cat_id = options[choice]
     if st.button(f"开始采集该分类（{cat_id}）", type="primary"):

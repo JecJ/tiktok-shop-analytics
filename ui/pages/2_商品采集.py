@@ -13,13 +13,13 @@ setup_env()
 require_password()
 
 st.title("🛍️ 商品采集")
-st.caption("按关键词 / 商品名称搜索（如 yoga mat）或按商品 ID 精准采集。数据来自 EchoTik OpenAPI。")
+st.caption("美国站关键词 / 商品搜索（默认文胸类目，如 bra）或按商品 ID 精准采集。数据来自 EchoTik OpenAPI。")
 
 mode = st.radio("采集方式", ["按关键词 / 商品名称搜索", "按商品 ID 采集"], horizontal=True)
 
 if mode.startswith("按关键词"):
     kw = st.text_input("关键词 / 商品名称（多个用英文逗号分隔）",
-                       placeholder="yoga mat, massage gun, air fryer")
+                       value="bra", placeholder="bra, lingerie, push up bra")
     limit = st.number_input("数量上限（每个关键词）", min_value=1, max_value=50, value=20)
     if st.button("开始采集", type="primary"):
         if not kw.strip():
